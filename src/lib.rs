@@ -2,7 +2,6 @@
 mod memory_region;
 
 use memory_region::MemoryRegion;
-use core::{mem, ptr};
 
 
 trait allocator {
@@ -53,6 +52,22 @@ impl<'a> BoundaryTag {
         tag.size = size;
 
         tag
+    }
+
+    fn divide_two_part(tag: &'a mut BoundaryTag, request_size: usize) -> (&'a mut BoundaryTag, Option<&'a mut BoundaryTag>)
+    {
+        if tag.size <= request_size {
+            return (tag, None);
+        }
+
+        // Create new block at the tail of the tag.
+        let new_tag_size = tag.size - request_size;
+        tag.size = new_tag_size;
+
+        let new_tag_addr = (tag as *const _) as usize + tag.size;
+        let new_tag = BoundaryTag::from_memory(new_tag_addr, request_size);
+
+        (tag, Some(new_tag))
     }
 }
 
