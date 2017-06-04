@@ -35,12 +35,12 @@ mod tests {
 
     #[test]
     fn test_all() {
-        const size: usize = 4096;
-        let x: &[usize; size] = unsafe { mem::zeroed() };
+        const SIZE: usize = 4096;
+        let x: &[usize; SIZE] = unsafe { mem::zeroed() };
         let addr = (x as (*const _)) as usize;
 
-        let r = MemoryRegion::new(addr, size);
+        let r = MemoryRegion::new(addr, SIZE);
         assert_eq!(addr, r.addr());
-        assert_eq!(size, r.size());
+        assert_eq!(SIZE, r.size());
     }
 }
