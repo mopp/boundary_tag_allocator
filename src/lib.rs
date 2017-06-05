@@ -79,12 +79,22 @@ mod tests {
     use super::MemoryRegion;
     use super::BoundaryTag;
 
+    fn allocate_memory() -> (usize, usize)
+    {
+        const SIZE: usize = 4096;
+        let ref mut x: [u8; SIZE] = unsafe { mem::zeroed() };
+
+        assert_eq!(SIZE, mem::size_of_val(x));
+
+        let addr = (x as *const _) as usize;
+
+        (addr, SIZE)
+    }
+
     #[test]
     fn test_all()
     {
-        const SIZE: usize = 4096;
-        let x: &[u8; SIZE] = unsafe { mem::zeroed() };
-        let addr = (x as *const _) as usize;
+        let (addr, SIZE) = allocate_memory();
 
         let _ = MemoryRegion::new(addr, SIZE);
     }
@@ -100,12 +110,7 @@ mod tests {
     #[test]
     fn test_boundary_tag_from_memory()
     {
-        const SIZE: usize = 4096;
-        let ref mut x: [u8; SIZE] = unsafe { mem::zeroed() };
-
-        assert_eq!(SIZE, mem::size_of_val(x));
-
-        let addr = (x as *const _) as usize;
+        let (addr, SIZE) = allocate_memory();
 
         let tag = BoundaryTag::from_memory(addr, SIZE);
         assert_eq!((tag as *const _) as usize, addr);
