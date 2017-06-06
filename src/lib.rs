@@ -35,7 +35,7 @@ impl<'a> MemoryManager<'a> {
 
 
 #[repr(C)]
-#[derive(Debug, PartialEq)]
+#[derive(Debug)]
 struct BoundaryTag {
     is_alloc: bool,
     is_sentinel: bool,
@@ -129,7 +129,7 @@ mod tests {
 
         let request_size = size;
         let (tag, new_tag_opt) = BoundaryTag::divide_two_part(tag, request_size);
-        assert_eq!(new_tag_opt, None);
+        assert!(new_tag_opt.is_none());
 
         let request_size = size / 4;
         let (tag, new_tag_opt) = BoundaryTag::divide_two_part(tag, request_size);
