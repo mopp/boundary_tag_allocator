@@ -1,6 +1,7 @@
 #![no_std]
 mod memory_region;
 
+use core::mem;
 use memory_region::MemoryRegion;
 
 
@@ -34,7 +35,7 @@ impl<'a> MemoryManager<'a> {
 
 
 #[repr(C)]
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 struct BoundaryTag {
     is_alloc: bool,
     is_sentinel: bool,
@@ -61,8 +62,9 @@ impl<'a> BoundaryTag {
         }
 
         // Create new block at the tail of the tag.
-        let new_tag_size = tag.size - request_size;
+        let new_tag_size = tag.size - (request_size - mem::size_of::<BoundaryTag>());
         tag.size = new_tag_size;
+        tag.is_sentinel = false;
 
         let new_tag_addr = (tag as *const _) as usize + tag.size;
         let new_tag = BoundaryTag::from_memory(new_tag_addr, request_size);
@@ -94,9 +96,9 @@ mod tests {
     #[test]
     fn test_all()
     {
-        let (addr, SIZE) = allocate_memory();
+        let (addr, size) = allocate_memory();
 
-        let _ = MemoryRegion::new(addr, SIZE);
+        let _ = MemoryRegion::new(addr, size);
     }
 
     #[test]
@@ -110,12 +112,36 @@ mod tests {
     #[test]
     fn test_boundary_tag_from_memory()
     {
-        let (addr, SIZE) = allocate_memory();
+        let (addr, size) = allocate_memory();
 
-        let tag = BoundaryTag::from_memory(addr, SIZE);
+        let tag = BoundaryTag::from_memory(addr, size);
         assert_eq!((tag as *const _) as usize, addr);
-        assert_eq!(tag.size, SIZE);
+        assert_eq!(tag.size, size);
         assert_eq!(tag.is_alloc, false);
         assert_eq!(tag.is_sentinel, true);
+    }
+
+    #[test]
+    fn test_divide_two_part()
+    {
+        let (addr, size) = allocate_memory();
+        let tag = BoundaryTag::from_memory(addr, size);
+
+        let request_size = size;
+        let (tag, new_tag_opt) = BoundaryTag::divide_two_part(tag, request_size);
+        assert_eq!(new_tag_opt, None);
+
+        let request_size = size / 4;
+        let (tag, new_tag_opt) = BoundaryTag::divide_two_part(tag, request_size);
+        let new_tag = new_tag_opt.unwrap();
+
+        assert_eq!((new_tag as *const _) as usize, addr + (size - (request_size - mem::size_of::<BoundaryTag>())));
+        assert_eq!(new_tag.size, request_size);
+        assert_eq!(new_tag.is_alloc, false);
+        assert_eq!(new_tag.is_sentinel, true);
+
+        assert_eq!(tag.is_sentinel, false);
+        assert_eq!(tag.is_alloc, false);
+        assert_eq!(tag.size, size - (request_size - mem::size_of::<BoundaryTag>()));
     }
 }
