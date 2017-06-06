@@ -50,7 +50,7 @@ impl<'a> BoundaryTag {
 
         tag.is_alloc = false;
         tag.is_sentinel = true;
-        tag.size = size;
+        tag.size = size - mem::size_of::<BoundaryTag>();
 
         tag
     }
@@ -116,7 +116,7 @@ mod tests {
 
         let tag = BoundaryTag::from_memory(addr, size);
         assert_eq!((tag as *const _) as usize, addr);
-        assert_eq!(tag.size, size);
+        assert_eq!(tag.size, size - mem::size_of::<BoundaryTag>());
         assert_eq!(tag.is_alloc, false);
         assert_eq!(tag.is_sentinel, true);
     }
