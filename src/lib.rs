@@ -171,4 +171,34 @@ mod tests {
 
         assert_eq!(size, tag.size + new_tag.size + mem::size_of::<BoundaryTag>() * 2);
     }
+
+    #[test]
+    fn test_next_tag_of()
+    {
+        let (addr, size) = allocate_memory();
+        let tag = BoundaryTag::from_memory(addr, size);
+        let (tag, next_tag_opt) = BoundaryTag::next_tag_of(tag);
+        assert_eq!(next_tag_opt.is_none(), true);
+
+        let request_size = size / 4;
+        let (tag, new_tag_opt) = BoundaryTag::divide_two_part(tag, request_size);
+        assert_eq!(new_tag_opt.is_none(), false);
+
+        let new_tag = new_tag_opt.unwrap();
+
+        let (tag, next_tag_opt) = BoundaryTag::next_tag_of(tag);
+        assert_eq!(next_tag_opt.is_none(), false);
+        let next_tag = next_tag_opt.unwrap();
+
+        assert_eq!(new_tag.addr(), next_tag.addr());
+        assert_eq!(new_tag.size, next_tag.size);
+        assert_eq!(new_tag.is_alloc, next_tag.is_alloc);
+        assert_eq!(new_tag.is_sentinel, next_tag.is_sentinel);
+        assert_eq!(tag.addr(), addr);
+
+        let (next_tag, next_next_tag_opt) = BoundaryTag::next_tag_of(next_tag);
+        assert_eq!(next_next_tag_opt.is_none(), true);
+
+        assert_eq!(next_tag.size, request_size);
+    }
 }
