@@ -57,17 +57,19 @@ impl<'a> BoundaryTag {
 
     fn divide_two_part(tag: &'a mut BoundaryTag, request_size: usize) -> (&'a mut BoundaryTag, Option<&'a mut BoundaryTag>)
     {
-        if tag.size <= request_size {
+        let required_size = request_size + mem::size_of::<BoundaryTag>();
+        if tag.size <= required_size {
             return (tag, None);
         }
+        // debug_assert_eq!();
 
         // Create new block at the tail of the tag.
-        let new_tag_size = tag.size - (request_size - mem::size_of::<BoundaryTag>());
-        tag.size = new_tag_size;
+        let current_tag_size = tag.size - required_size;
+        tag.size = current_tag_size;
         tag.is_sentinel = false;
 
         let new_tag_addr = (tag as *const _) as usize + tag.size;
-        let new_tag = BoundaryTag::from_memory(new_tag_addr, request_size);
+        let new_tag = BoundaryTag::from_memory(new_tag_addr, required_size);
 
         (tag, Some(new_tag))
     }
@@ -135,13 +137,15 @@ mod tests {
         let (tag, new_tag_opt) = BoundaryTag::divide_two_part(tag, request_size);
         let new_tag = new_tag_opt.unwrap();
 
-        assert_eq!((new_tag as *const _) as usize, addr + (size - (request_size - mem::size_of::<BoundaryTag>())));
+        assert_eq!((new_tag as *const _) as usize, addr + tag.size);
         assert_eq!(new_tag.size, request_size);
         assert_eq!(new_tag.is_alloc, false);
         assert_eq!(new_tag.is_sentinel, true);
 
-        assert_eq!(tag.is_sentinel, false);
+        assert_eq!(tag.size, size - (new_tag.size + mem::size_of::<BoundaryTag>() * 2));
         assert_eq!(tag.is_alloc, false);
-        assert_eq!(tag.size, size - (request_size - mem::size_of::<BoundaryTag>()));
+        assert_eq!(tag.is_sentinel, false);
+
+        assert_eq!(size, tag.size + new_tag.size + mem::size_of::<BoundaryTag>() * 2);
     }
 }
