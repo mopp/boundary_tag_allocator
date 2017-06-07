@@ -44,6 +44,11 @@ struct BoundaryTag {
 
 
 impl<'a> BoundaryTag {
+    fn addr(&self) -> usize
+    {
+        (self as *const _) as usize
+    }
+
     fn from_memory(addr: usize, size: usize) -> &'a mut BoundaryTag
     {
         let tag = unsafe { &mut *(addr as *mut BoundaryTag) };
@@ -108,6 +113,14 @@ mod tests {
     {
         let slice: &[MemoryRegion] = &[];
         let _ = MemoryManager::new(slice);
+    }
+
+    #[test]
+    fn test_addr()
+    {
+        let (addr, size) = allocate_memory();
+        let tag = BoundaryTag::from_memory(addr, size);
+        assert_eq!(addr, tag.addr());
     }
 
     #[test]
