@@ -5,7 +5,7 @@ use core::mem;
 use memory_region::MemoryRegion;
 
 
-trait allocator {
+trait Allocator {
     fn malloc(usize) -> usize;
     fn free(usize);
 }
