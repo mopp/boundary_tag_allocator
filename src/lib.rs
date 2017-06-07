@@ -78,15 +78,15 @@ impl<'a> BoundaryTag {
         (tag, Some(new_tag))
     }
 
-    fn next_tag_of(tag: &'a mut BoundaryTag) -> Option<&'a mut BoundaryTag>
+    fn next_tag_of(tag: &'a mut BoundaryTag) -> (&'a mut BoundaryTag, Option<&'a mut BoundaryTag>)
     {
         if tag.is_sentinel {
-            return None;
+            return (tag, None);
         }
 
         let addr = tag.addr() + tag.size;
         let next_tag = unsafe { &mut *(addr as *mut BoundaryTag) };
-        Some(next_tag)
+        (tag, Some(next_tag))
     }
 }
 
