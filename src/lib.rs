@@ -61,7 +61,6 @@ impl<'a> BoundaryTag {
         if tag.size <= required_size {
             return (tag, None);
         }
-        // debug_assert_eq!();
 
         // Create new block at the tail of the tag.
         let current_tag_size = tag.size - required_size;
