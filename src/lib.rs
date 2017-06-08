@@ -165,6 +165,7 @@ mod tests {
     {
         let (addr, size) = allocate_memory();
         let tag = BoundaryTag::from_memory(addr, size);
+        assert_eq!(tag.size, size - mem::size_of::<BoundaryTag>());
 
         let request_size = size;
         let (tag, new_tag_opt) = BoundaryTag::divide_two_part(tag, request_size);
@@ -173,6 +174,7 @@ mod tests {
         let request_size = size / 4;
         let (tag, new_tag_opt) = BoundaryTag::divide_two_part(tag, request_size);
         let new_tag = new_tag_opt.unwrap();
+        assert_eq!(tag.size, size - mem::size_of::<BoundaryTag>() - request_size - mem::size_of::<BoundaryTag>());
 
         assert_eq!((new_tag as *const _) as usize, addr + tag.size);
         assert_eq!(new_tag.size, request_size);
