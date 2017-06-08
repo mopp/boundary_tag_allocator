@@ -40,6 +40,7 @@ struct BoundaryTag {
     is_alloc: bool,
     is_sentinel: bool,
     size: usize,
+    prev_tag_size: usize,
 }
 
 
@@ -56,6 +57,7 @@ impl<'a> BoundaryTag {
         tag.is_alloc = false;
         tag.is_sentinel = true;
         tag.size = size - mem::size_of::<BoundaryTag>();
+        tag.prev_tag_size = 0;
 
         tag
     }
@@ -74,6 +76,7 @@ impl<'a> BoundaryTag {
 
         let new_tag_addr = (tag as *const _) as usize + tag.size;
         let new_tag = BoundaryTag::from_memory(new_tag_addr, required_size);
+        new_tag.prev_tag_size = tag.size;
 
         (tag, Some(new_tag))
     }
@@ -87,6 +90,17 @@ impl<'a> BoundaryTag {
         let addr = tag.addr() + tag.size;
         let next_tag = unsafe { &mut *(addr as *mut BoundaryTag) };
         (tag, Some(next_tag))
+    }
+
+    fn prev_tag_of(tag: &'a mut BoundaryTag) -> (Option<&'a mut BoundaryTag>, &'a mut BoundaryTag)
+    {
+        if tag.prev_tag_size == 0 {
+            return (None, tag)
+        }
+
+        let addr = tag.addr() - tag.prev_tag_size;
+        let prev_tag = unsafe { &mut *(addr as *mut BoundaryTag) };
+        (Some(prev_tag), tag)
     }
 }
 
@@ -200,5 +214,31 @@ mod tests {
         assert_eq!(next_next_tag_opt.is_none(), true);
 
         assert_eq!(next_tag.size, request_size);
+    }
+
+    #[test]
+    fn test_prev_tag_of()
+    {
+        let (addr, size) = allocate_memory();
+        let tag = BoundaryTag::from_memory(addr, size);
+
+        let (none, tag) = BoundaryTag::prev_tag_of(tag);
+        assert_eq!(none.is_none(), true);
+
+        let request_size = size / 4;
+        let (tag, new_tag_opt) = BoundaryTag::divide_two_part(tag, request_size);
+        assert_eq!(new_tag_opt.is_none(), false);
+
+        let new_tag = new_tag_opt.unwrap();
+        let (prev_tag_opt, _) = BoundaryTag::prev_tag_of(new_tag);
+        assert_eq!(prev_tag_opt.is_none(), false);
+
+        let prev_tag = prev_tag_opt.unwrap();
+
+        assert_eq!(prev_tag.addr(), addr);
+        assert_eq!(prev_tag.addr(), tag.addr());
+        assert_eq!(prev_tag.is_alloc, false);
+        assert_eq!(prev_tag.is_sentinel, false);
+        assert_eq!(prev_tag.size, size - (request_size + 2 * mem::size_of::<BoundaryTag>()));
     }
 }
