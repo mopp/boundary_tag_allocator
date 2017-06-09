@@ -50,6 +50,11 @@ impl<'a> BoundaryTag {
         (self as *const _) as usize
     }
 
+    fn addr_free_region(&self) -> usize
+    {
+        self.addr() + mem::size_of::<BoundaryTag>()
+    }
+
     fn from_memory(addr: usize, size: usize) -> &'a mut BoundaryTag
     {
         let tag = unsafe { &mut *(addr as *mut BoundaryTag) };
@@ -170,6 +175,7 @@ mod tests {
         let request_size = size;
         let (tag, new_tag_opt) = BoundaryTag::divide_two_part(tag, request_size);
         assert!(new_tag_opt.is_none());
+        assert_eq!(tag.size, size - mem::size_of::<BoundaryTag>());
 
         let request_size = size / 4;
         let (tag, new_tag_opt) = BoundaryTag::divide_two_part(tag, request_size);
@@ -242,5 +248,27 @@ mod tests {
         assert_eq!(prev_tag.is_alloc, false);
         assert_eq!(prev_tag.is_sentinel, false);
         assert_eq!(prev_tag.size, size - (request_size + 2 * mem::size_of::<BoundaryTag>()));
+    }
+
+    #[test]
+    fn test_addr_free_region()
+    {
+        let (addr, size) = allocate_memory();
+        let tag = BoundaryTag::from_memory(addr, size);
+        assert_eq!(tag.addr_free_region(), addr + mem::size_of::<BoundaryTag>());
+        assert_eq!(tag.size, size - mem::size_of::<BoundaryTag>());
+
+        let request_size = size / 4;
+        let (tag, new_tag_opt) = BoundaryTag::divide_two_part(tag, request_size);
+        assert_eq!(tag.addr_free_region(), addr + mem::size_of::<BoundaryTag>());
+        assert_eq!(tag.size, size - mem::size_of::<BoundaryTag>() - request_size - mem::size_of::<BoundaryTag>());
+
+        let new_tag = new_tag_opt.unwrap();
+        assert_eq!(new_tag.addr_free_region(), new_tag.addr() + mem::size_of::<BoundaryTag>());
+        assert_eq!(new_tag.size, request_size);
+        assert_eq!(tag.size + new_tag.size, size - mem::size_of::<BoundaryTag>() * 2);
+        assert_eq!(tag.addr(), addr);
+        assert_eq!(new_tag.addr(), tag.addr() + mem::size_of::<BoundaryTag>() + tag.size);
+        assert_eq!(new_tag.addr_free_region(), tag.addr_free_region() + tag.size + mem::size_of::<BoundaryTag>());
     }
 }
