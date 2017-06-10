@@ -102,6 +102,23 @@ impl<'a> BoundaryTag {
         (tag, Some(new_tag))
     }
 
+    // FIXME: This function will cause dangling pointer problems.
+    fn merge(tag_x: &'a mut BoundaryTag, tag_y: &'a mut BoundaryTag) -> (&'a mut BoundaryTag)
+    {
+        // TODO: use Result type.
+        let (tag_prev, tag_next) =
+            match (tag_x.is_prev_of(tag_y), tag_x.is_next_of(tag_y)) {
+                (true, false) => (tag_x, tag_y),
+                (false, true) => (tag_y, tag_x),
+                _ => panic!("FIXME: to handle the invalid cases"),
+            };
+
+        tag_prev.free_area_size += mem::size_of::<BoundaryTag>() + tag_next.free_area_size;
+        tag_prev.is_sentinel = tag_next.is_sentinel;
+
+        tag_prev
+    }
+
     fn next_tag_of(tag: &'a mut BoundaryTag) -> (&'a mut BoundaryTag, Option<&'a mut BoundaryTag>)
     {
         if tag.is_sentinel {
@@ -223,6 +240,19 @@ mod tests {
         assert_eq!(tag.is_sentinel, false);
 
         assert_eq!(size, tag.free_area_size + new_tag.free_area_size + mem::size_of::<BoundaryTag>() * 2);
+    }
+
+    #[test]
+    fn test_merge()
+    {
+        let (addr, size) = allocate_memory();
+        let tag = BoundaryTag::from_memory(addr, size);
+        let request_size = size / 4;
+        let (tag, new_tag_opt) = BoundaryTag::divide(tag, request_size);
+        let new_tag = new_tag_opt.unwrap();
+
+        let merged_tag = BoundaryTag::merge(tag, new_tag);
+        assert_eq!(merged_tag.free_area_size, size - mem::size_of::<BoundaryTag>());
     }
 
     #[test]
