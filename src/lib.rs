@@ -65,6 +65,14 @@ impl<'a> BoundaryTag {
         }
     }
 
+    fn is_prev_of(&self, tag: &'a mut BoundaryTag) -> bool
+    {
+        match BoundaryTag::prev_tag_of(tag) {
+            (Some(ref v), _) if v.addr() == self.addr() => true,
+            _  => false,
+        }
+    }
+
     fn from_memory(addr: usize, size: usize) -> &'a mut BoundaryTag
     {
         let tag = unsafe { &mut *(addr as *mut BoundaryTag) };
@@ -310,5 +318,19 @@ mod tests {
 
         assert_eq!(new_tag.is_next_of(tag), true);
         assert_eq!(tag.is_next_of(new_tag), false);
+    }
+
+
+    #[test]
+    fn test_is_prev_of()
+    {
+        let (addr, size) = allocate_memory();
+        let tag = BoundaryTag::from_memory(addr, size);
+        let request_size = size / 4;
+        let (tag, new_tag_opt) = BoundaryTag::divide(tag, request_size);
+        let new_tag = new_tag_opt.unwrap();
+
+        assert_eq!(new_tag.is_prev_of(tag), false);
+        assert_eq!(tag.is_prev_of(new_tag), true);
     }
 }
