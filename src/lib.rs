@@ -67,7 +67,7 @@ impl<'a> BoundaryTag {
         tag
     }
 
-    fn divide_two_part(tag: &'a mut BoundaryTag, request_size: usize) -> (&'a mut BoundaryTag, Option<&'a mut BoundaryTag>)
+    fn divide(tag: &'a mut BoundaryTag, request_size: usize) -> (&'a mut BoundaryTag, Option<&'a mut BoundaryTag>)
     {
         let required_size = request_size + mem::size_of::<BoundaryTag>();
         if tag.free_area_size <= required_size {
@@ -145,7 +145,7 @@ mod tests {
         assert_eq!(tag.free_area_size, size - mem::size_of::<BoundaryTag>());
 
         let request_size = size / 2;
-        let (tag, new_tag_opt) = BoundaryTag::divide_two_part(tag, request_size);
+        let (tag, new_tag_opt) = BoundaryTag::divide(tag, request_size);
         let new_tag = new_tag_opt.unwrap();
         assert_eq!(tag.free_area_size, size - mem::size_of::<BoundaryTag>() * 2 - request_size);
         assert_eq!(new_tag.free_area_size, request_size);
@@ -181,19 +181,19 @@ mod tests {
     }
 
     #[test]
-    fn test_divide_two_part()
+    fn test_divide()
     {
         let (addr, size) = allocate_memory();
         let tag = BoundaryTag::from_memory(addr, size);
         assert_eq!(tag.free_area_size, size - mem::size_of::<BoundaryTag>());
 
         let request_size = size;
-        let (tag, new_tag_opt) = BoundaryTag::divide_two_part(tag, request_size);
+        let (tag, new_tag_opt) = BoundaryTag::divide(tag, request_size);
         assert!(new_tag_opt.is_none());
         assert_eq!(tag.free_area_size, size - mem::size_of::<BoundaryTag>());
 
         let request_size = size / 4;
-        let (tag, new_tag_opt) = BoundaryTag::divide_two_part(tag, request_size);
+        let (tag, new_tag_opt) = BoundaryTag::divide(tag, request_size);
         let new_tag = new_tag_opt.unwrap();
         assert_eq!(tag.free_area_size, size - mem::size_of::<BoundaryTag>() - request_size - mem::size_of::<BoundaryTag>());
 
@@ -218,7 +218,7 @@ mod tests {
         assert_eq!(next_tag_opt.is_none(), true);
 
         let request_size = size / 4;
-        let (tag, new_tag_opt) = BoundaryTag::divide_two_part(tag, request_size);
+        let (tag, new_tag_opt) = BoundaryTag::divide(tag, request_size);
         assert_eq!(new_tag_opt.is_none(), false);
 
         let new_tag = new_tag_opt.unwrap();
@@ -249,7 +249,7 @@ mod tests {
         assert_eq!(none.is_none(), true);
 
         let request_size = size / 4;
-        let (tag, new_tag_opt) = BoundaryTag::divide_two_part(tag, request_size);
+        let (tag, new_tag_opt) = BoundaryTag::divide(tag, request_size);
         assert_eq!(new_tag_opt.is_none(), false);
 
         let new_tag = new_tag_opt.unwrap();
@@ -274,7 +274,7 @@ mod tests {
         assert_eq!(tag.free_area_size, size - mem::size_of::<BoundaryTag>());
 
         let request_size = size / 4;
-        let (tag, new_tag_opt) = BoundaryTag::divide_two_part(tag, request_size);
+        let (tag, new_tag_opt) = BoundaryTag::divide(tag, request_size);
         assert_eq!(tag.addr(), addr);
         assert_eq!(tag.addr_free_area(), addr + mem::size_of::<BoundaryTag>());
         assert_eq!(tag.free_area_size, size - mem::size_of::<BoundaryTag>() - request_size - mem::size_of::<BoundaryTag>());
