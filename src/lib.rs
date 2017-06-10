@@ -57,11 +57,9 @@ impl<'a> BoundaryTag {
 
     fn is_next_of(&self, tag: &'a mut BoundaryTag) -> bool
     {
-        let (_, opt) = BoundaryTag::next_tag_of(tag);
-        if let Some(next) = opt {
-            self.addr() == next.addr()
-        } else {
-            false
+        match BoundaryTag::next_tag_of(tag) {
+            (_, Some(ref v)) if v.addr() == self.addr() => true,
+            _  => false,
         }
     }
 
