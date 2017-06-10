@@ -39,7 +39,7 @@ impl<'a> MemoryManager<'a> {
 struct BoundaryTag {
     is_alloc: bool,
     is_sentinel: bool,
-    size: usize,
+    free_area_size: usize,
     prev_tag_size: usize,
 }
 
@@ -61,7 +61,7 @@ impl<'a> BoundaryTag {
 
         tag.is_alloc = false;
         tag.is_sentinel = true;
-        tag.size = size - mem::size_of::<BoundaryTag>();
+        tag.free_area_size = size - mem::size_of::<BoundaryTag>();
         tag.prev_tag_size = 0;
 
         tag
@@ -70,18 +70,18 @@ impl<'a> BoundaryTag {
     fn divide_two_part(tag: &'a mut BoundaryTag, request_size: usize) -> (&'a mut BoundaryTag, Option<&'a mut BoundaryTag>)
     {
         let required_size = request_size + mem::size_of::<BoundaryTag>();
-        if tag.size <= required_size {
+        if tag.free_area_size <= required_size {
             return (tag, None);
         }
 
-        let size = tag.size;
-        tag.size = tag.size - required_size;
+        let free_area_size = tag.free_area_size;
+        tag.free_area_size = tag.free_area_size - required_size;
         tag.is_sentinel = false;
 
         // Create new block at the tail of the tag.
-        let new_tag_addr = tag.addr_free_area() + size - required_size;
+        let new_tag_addr = tag.addr_free_area() + free_area_size - required_size;
         let new_tag = BoundaryTag::from_memory(new_tag_addr, required_size);
-        new_tag.prev_tag_size = tag.size;
+        new_tag.prev_tag_size = tag.free_area_size;
 
         (tag, Some(new_tag))
     }
@@ -92,7 +92,7 @@ impl<'a> BoundaryTag {
             return (tag, None);
         }
 
-        let addr = tag.addr() + tag.size + mem::size_of::<BoundaryTag>();
+        let addr = tag.addr() + tag.free_area_size + mem::size_of::<BoundaryTag>();
         let next_tag = unsafe { &mut *(addr as *mut BoundaryTag) };
         (tag, Some(next_tag))
     }
@@ -142,14 +142,14 @@ mod tests {
     {
         let (addr, size) = allocate_memory();
         let tag = BoundaryTag::from_memory(addr, size);
-        assert_eq!(tag.size, size - mem::size_of::<BoundaryTag>());
+        assert_eq!(tag.free_area_size, size - mem::size_of::<BoundaryTag>());
 
         let request_size = size / 2;
         let (tag, new_tag_opt) = BoundaryTag::divide_two_part(tag, request_size);
         let new_tag = new_tag_opt.unwrap();
-        assert_eq!(tag.size, size - mem::size_of::<BoundaryTag>() * 2 - request_size);
-        assert_eq!(new_tag.size, request_size);
-        assert_eq!(size, tag.size + new_tag.size + mem::size_of::<BoundaryTag>() * 2);
+        assert_eq!(tag.free_area_size, size - mem::size_of::<BoundaryTag>() * 2 - request_size);
+        assert_eq!(new_tag.free_area_size, request_size);
+        assert_eq!(size, tag.free_area_size + new_tag.free_area_size + mem::size_of::<BoundaryTag>() * 2);
     }
 
     #[test]
@@ -175,7 +175,7 @@ mod tests {
 
         let tag = BoundaryTag::from_memory(addr, size);
         assert_eq!((tag as *const _) as usize, addr);
-        assert_eq!(tag.size, size - mem::size_of::<BoundaryTag>());
+        assert_eq!(tag.free_area_size, size - mem::size_of::<BoundaryTag>());
         assert_eq!(tag.is_alloc, false);
         assert_eq!(tag.is_sentinel, true);
     }
@@ -185,28 +185,28 @@ mod tests {
     {
         let (addr, size) = allocate_memory();
         let tag = BoundaryTag::from_memory(addr, size);
-        assert_eq!(tag.size, size - mem::size_of::<BoundaryTag>());
+        assert_eq!(tag.free_area_size, size - mem::size_of::<BoundaryTag>());
 
         let request_size = size;
         let (tag, new_tag_opt) = BoundaryTag::divide_two_part(tag, request_size);
         assert!(new_tag_opt.is_none());
-        assert_eq!(tag.size, size - mem::size_of::<BoundaryTag>());
+        assert_eq!(tag.free_area_size, size - mem::size_of::<BoundaryTag>());
 
         let request_size = size / 4;
         let (tag, new_tag_opt) = BoundaryTag::divide_two_part(tag, request_size);
         let new_tag = new_tag_opt.unwrap();
-        assert_eq!(tag.size, size - mem::size_of::<BoundaryTag>() - request_size - mem::size_of::<BoundaryTag>());
+        assert_eq!(tag.free_area_size, size - mem::size_of::<BoundaryTag>() - request_size - mem::size_of::<BoundaryTag>());
 
-        assert_eq!(new_tag.addr(), addr + mem::size_of::<BoundaryTag>() + tag.size);
-        assert_eq!(new_tag.size, request_size);
+        assert_eq!(new_tag.addr(), addr + mem::size_of::<BoundaryTag>() + tag.free_area_size);
+        assert_eq!(new_tag.free_area_size, request_size);
         assert_eq!(new_tag.is_alloc, false);
         assert_eq!(new_tag.is_sentinel, true);
 
-        assert_eq!(tag.size, size - (new_tag.size + mem::size_of::<BoundaryTag>() * 2));
+        assert_eq!(tag.free_area_size, size - (new_tag.free_area_size + mem::size_of::<BoundaryTag>() * 2));
         assert_eq!(tag.is_alloc, false);
         assert_eq!(tag.is_sentinel, false);
 
-        assert_eq!(size, tag.size + new_tag.size + mem::size_of::<BoundaryTag>() * 2);
+        assert_eq!(size, tag.free_area_size + new_tag.free_area_size + mem::size_of::<BoundaryTag>() * 2);
     }
 
     #[test]
@@ -228,7 +228,7 @@ mod tests {
         let next_tag = next_tag_opt.unwrap();
 
         assert_eq!(new_tag.addr(), next_tag.addr());
-        assert_eq!(new_tag.size, next_tag.size);
+        assert_eq!(new_tag.free_area_size, next_tag.free_area_size);
         assert_eq!(new_tag.is_alloc, next_tag.is_alloc);
         assert_eq!(new_tag.is_sentinel, next_tag.is_sentinel);
         assert_eq!(tag.addr(), addr);
@@ -236,7 +236,7 @@ mod tests {
         let (next_tag, next_next_tag_opt) = BoundaryTag::next_tag_of(next_tag);
         assert_eq!(next_next_tag_opt.is_none(), true);
 
-        assert_eq!(next_tag.size, request_size);
+        assert_eq!(next_tag.free_area_size, request_size);
     }
 
     #[test]
@@ -262,7 +262,7 @@ mod tests {
         assert_eq!(prev_tag.addr(), tag.addr());
         assert_eq!(prev_tag.is_alloc, false);
         assert_eq!(prev_tag.is_sentinel, false);
-        assert_eq!(prev_tag.size, size - (request_size + 2 * mem::size_of::<BoundaryTag>()));
+        assert_eq!(prev_tag.free_area_size, size - (request_size + 2 * mem::size_of::<BoundaryTag>()));
     }
 
     #[test]
@@ -271,21 +271,21 @@ mod tests {
         let (addr, size) = allocate_memory();
         let tag = BoundaryTag::from_memory(addr, size);
         assert_eq!(tag.addr_free_area(), addr + mem::size_of::<BoundaryTag>());
-        assert_eq!(tag.size, size - mem::size_of::<BoundaryTag>());
+        assert_eq!(tag.free_area_size, size - mem::size_of::<BoundaryTag>());
 
         let request_size = size / 4;
         let (tag, new_tag_opt) = BoundaryTag::divide_two_part(tag, request_size);
         assert_eq!(tag.addr(), addr);
         assert_eq!(tag.addr_free_area(), addr + mem::size_of::<BoundaryTag>());
-        assert_eq!(tag.size, size - mem::size_of::<BoundaryTag>() - request_size - mem::size_of::<BoundaryTag>());
+        assert_eq!(tag.free_area_size, size - mem::size_of::<BoundaryTag>() - request_size - mem::size_of::<BoundaryTag>());
 
         let new_tag = new_tag_opt.unwrap();
         assert_eq!(new_tag.addr_free_area(), new_tag.addr() + mem::size_of::<BoundaryTag>());
-        assert_eq!(new_tag.size, request_size);
-        assert_eq!(new_tag.addr(), tag.addr() + mem::size_of::<BoundaryTag>() + tag.size);
-        assert_eq!(new_tag.addr_free_area(), tag.addr_free_area() + tag.size + mem::size_of::<BoundaryTag>());
+        assert_eq!(new_tag.free_area_size, request_size);
+        assert_eq!(new_tag.addr(), tag.addr() + mem::size_of::<BoundaryTag>() + tag.free_area_size);
+        assert_eq!(new_tag.addr_free_area(), tag.addr_free_area() + tag.free_area_size + mem::size_of::<BoundaryTag>());
 
-        assert_eq!(tag.addr(), new_tag.addr() - tag.size - mem::size_of::<BoundaryTag>());
-        assert_eq!(tag.addr(), new_tag.addr_free_area() - tag.size - mem::size_of::<BoundaryTag>() * 2);
+        assert_eq!(tag.addr(), new_tag.addr() - tag.free_area_size - mem::size_of::<BoundaryTag>());
+        assert_eq!(tag.addr(), new_tag.addr_free_area() - tag.free_area_size - mem::size_of::<BoundaryTag>() * 2);
     }
 }
