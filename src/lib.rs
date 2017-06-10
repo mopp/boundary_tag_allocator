@@ -50,7 +50,7 @@ impl<'a> BoundaryTag {
         (self as *const _) as usize
     }
 
-    fn addr_free_region(&self) -> usize
+    fn addr_free_area(&self) -> usize
     {
         self.addr() + mem::size_of::<BoundaryTag>()
     }
@@ -79,7 +79,7 @@ impl<'a> BoundaryTag {
         tag.is_sentinel = false;
 
         // Create new block at the tail of the tag.
-        let new_tag_addr = tag.addr_free_region() + size - required_size;
+        let new_tag_addr = tag.addr_free_area() + size - required_size;
         let new_tag = BoundaryTag::from_memory(new_tag_addr, required_size);
         new_tag.prev_tag_size = tag.size;
 
@@ -266,26 +266,26 @@ mod tests {
     }
 
     #[test]
-    fn test_addr_free_region()
+    fn test_addr_free_area()
     {
         let (addr, size) = allocate_memory();
         let tag = BoundaryTag::from_memory(addr, size);
-        assert_eq!(tag.addr_free_region(), addr + mem::size_of::<BoundaryTag>());
+        assert_eq!(tag.addr_free_area(), addr + mem::size_of::<BoundaryTag>());
         assert_eq!(tag.size, size - mem::size_of::<BoundaryTag>());
 
         let request_size = size / 4;
         let (tag, new_tag_opt) = BoundaryTag::divide_two_part(tag, request_size);
         assert_eq!(tag.addr(), addr);
-        assert_eq!(tag.addr_free_region(), addr + mem::size_of::<BoundaryTag>());
+        assert_eq!(tag.addr_free_area(), addr + mem::size_of::<BoundaryTag>());
         assert_eq!(tag.size, size - mem::size_of::<BoundaryTag>() - request_size - mem::size_of::<BoundaryTag>());
 
         let new_tag = new_tag_opt.unwrap();
-        assert_eq!(new_tag.addr_free_region(), new_tag.addr() + mem::size_of::<BoundaryTag>());
+        assert_eq!(new_tag.addr_free_area(), new_tag.addr() + mem::size_of::<BoundaryTag>());
         assert_eq!(new_tag.size, request_size);
         assert_eq!(new_tag.addr(), tag.addr() + mem::size_of::<BoundaryTag>() + tag.size);
-        assert_eq!(new_tag.addr_free_region(), tag.addr_free_region() + tag.size + mem::size_of::<BoundaryTag>());
+        assert_eq!(new_tag.addr_free_area(), tag.addr_free_area() + tag.size + mem::size_of::<BoundaryTag>());
 
         assert_eq!(tag.addr(), new_tag.addr() - tag.size - mem::size_of::<BoundaryTag>());
-        assert_eq!(tag.addr(), new_tag.addr_free_region() - tag.size - mem::size_of::<BoundaryTag>() * 2);
+        assert_eq!(tag.addr(), new_tag.addr_free_area() - tag.size - mem::size_of::<BoundaryTag>() * 2);
     }
 }
