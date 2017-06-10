@@ -55,6 +55,16 @@ impl<'a> BoundaryTag {
         self.addr() + mem::size_of::<BoundaryTag>()
     }
 
+    fn is_next_of(&self, tag: &'a mut BoundaryTag) -> bool
+    {
+        let (_, opt) = BoundaryTag::next_tag_of(tag);
+        if let Some(next) = opt {
+            self.addr() == next.addr()
+        } else {
+            false
+        }
+    }
+
     fn from_memory(addr: usize, size: usize) -> &'a mut BoundaryTag
     {
         let tag = unsafe { &mut *(addr as *mut BoundaryTag) };
@@ -287,5 +297,18 @@ mod tests {
 
         assert_eq!(tag.addr(), new_tag.addr() - tag.free_area_size - mem::size_of::<BoundaryTag>());
         assert_eq!(tag.addr(), new_tag.addr_free_area() - tag.free_area_size - mem::size_of::<BoundaryTag>() * 2);
+    }
+
+    #[test]
+    fn test_is_next_of()
+    {
+        let (addr, size) = allocate_memory();
+        let tag = BoundaryTag::from_memory(addr, size);
+        let request_size = size / 4;
+        let (tag, new_tag_opt) = BoundaryTag::divide(tag, request_size);
+        let new_tag = new_tag_opt.unwrap();
+
+        assert_eq!(new_tag.is_next_of(tag), true);
+        assert_eq!(tag.is_next_of(new_tag), false);
     }
 }
