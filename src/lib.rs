@@ -71,9 +71,14 @@ impl<'a> BoundaryTag {
         }
     }
 
+    unsafe fn cast_addr_tag_mut(addr: usize) -> &'a mut BoundaryTag
+    {
+        &mut *(addr as *mut BoundaryTag)
+    }
+
     fn from_memory(addr: usize, size: usize) -> &'a mut BoundaryTag
     {
-        let tag = unsafe { &mut *(addr as *mut BoundaryTag) };
+        let tag = unsafe { BoundaryTag::cast_addr_tag_mut(addr) };
 
         tag.is_alloc = false;
         tag.is_sentinel = true;
@@ -126,7 +131,7 @@ impl<'a> BoundaryTag {
         }
 
         let addr = tag.addr() + tag.free_area_size + mem::size_of::<BoundaryTag>();
-        let next_tag = unsafe { &mut *(addr as *mut BoundaryTag) };
+        let next_tag = unsafe { BoundaryTag::cast_addr_tag_mut(addr) };
         (tag, Some(next_tag))
     }
 
@@ -137,7 +142,7 @@ impl<'a> BoundaryTag {
         }
 
         let addr = tag.addr() - tag.prev_tag_size - mem::size_of::<BoundaryTag>();
-        let prev_tag = unsafe { &mut *(addr as *mut BoundaryTag) };
+        let prev_tag = unsafe { BoundaryTag::cast_addr_tag_mut(addr) };
         (Some(prev_tag), tag)
     }
 }
