@@ -1,35 +1,53 @@
 #![no_std]
-mod memory_region;
-
 use core::mem;
-use memory_region::MemoryRegion;
 
 
 trait Allocator {
-    fn malloc(usize) -> usize;
-    fn free(usize);
+    fn malloc<'a, T>(&mut self) -> Option<&'a mut T>;
+    fn free<T>(&self, &mut T);
 }
 
 
 struct MemoryManager<'a> {
-    memory_regions: &'a [MemoryRegion],
-    head: &'a BoundaryTag,
+    tags: &'a mut [&'a mut BoundaryTag],
 }
 
 
 impl<'a> MemoryManager<'a> {
-    fn new(mems: &'a [MemoryRegion]) -> MemoryManager
+    fn new(tags: &'a mut [&'a mut BoundaryTag]) -> MemoryManager
     {
-        assert!(mems.len() != 0);
-
-        // TODO: use all memory regions.
-        let addr = mems[0].addr();
-        let size = mems[0].size();
+        debug_assert!(tags.len() != 0);
 
         MemoryManager {
-            memory_regions: mems,
-            head: BoundaryTag::from_memory(addr, size),
+            tags: tags,
         }
+    }
+}
+
+impl<'a> Allocator for MemoryManager<'a> {
+    fn malloc<'b, T>(&mut self) -> Option<&'b mut T>
+    {
+        let size = mem::size_of::<T>();
+        self
+            .tags
+            .iter_mut()
+            .find(|t| size < t.free_area_size)
+            .map(|t| {
+                let (_, opt) = BoundaryTag::divide(t, size);
+                if let Some(t) = opt {
+                    t.is_alloc = true;
+                    unsafe {
+                        &mut *(t.addr_free_area() as *mut T)
+                    }
+                } else {
+                    panic!("");
+                }
+            })
+    }
+
+    fn free<T>(&self, _: &mut T)
+    {
+        // TODO
     }
 }
 
@@ -146,13 +164,16 @@ impl<'a> BoundaryTag {
     }
 }
 
+#[cfg(test)]
+#[macro_use]
+extern crate std;
 
 #[cfg(test)]
 mod tests {
-    use core::mem;
+    use std::mem;
     use super::MemoryManager;
-    use super::MemoryRegion;
     use super::BoundaryTag;
+    use super::Allocator;
 
     fn allocate_memory() -> (usize, usize)
     {
@@ -170,8 +191,28 @@ mod tests {
     fn test_all()
     {
         let (addr, size) = allocate_memory();
+        let tag1 = BoundaryTag::from_memory(addr, size);
 
-        let _ = MemoryRegion::new(addr, size);
+        let (addr, size) = allocate_memory();
+        let tag2 = BoundaryTag::from_memory(addr, size);
+
+        let mut tags = [tag1, tag2];
+        let mut mman = MemoryManager::new(&mut tags);
+
+        assert_eq!(mem::size_of::<BoundaryTag>(), 48);
+
+        // let u8_opt = mman.malloc::<u8>();
+        // assert_eq!(u8_opt.is_none(), false);
+        // let a = u8_opt.unwrap();
+        // *a = 0x10;
+
+        // for i in 0..SIZE {
+        // slice[i] = 0xAF;
+        // }
+        // for i in 0..SIZE {
+        // println!("{:?}", i);
+        // assert_eq!(slice[i], 0xAF);
+        // }
     }
 
     #[test]
@@ -193,7 +234,7 @@ mod tests {
     #[should_panic]
     fn test_memory_manager_panic()
     {
-        let slice: &[MemoryRegion] = &[];
+        let slice: &mut [&mut BoundaryTag] = &mut [];
         let _ = MemoryManager::new(slice);
     }
 
