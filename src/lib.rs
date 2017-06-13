@@ -40,7 +40,8 @@ struct BoundaryTag {
     is_alloc: bool,
     is_sentinel: bool,
     free_area_size: usize,
-    prev_tag_size: usize,
+    prev_tag_addr: Option<usize>,
+    next_tag_addr: Option<usize>,
 }
 
 
@@ -83,7 +84,8 @@ impl<'a> BoundaryTag {
         tag.is_alloc = false;
         tag.is_sentinel = true;
         tag.free_area_size = size - mem::size_of::<BoundaryTag>();
-        tag.prev_tag_size = 0;
+        tag.prev_tag_addr = None;
+        tag.next_tag_addr = None;
 
         tag
     }
@@ -101,8 +103,10 @@ impl<'a> BoundaryTag {
 
         // Create new block at the tail of the tag.
         let new_tag_addr = tag.addr_free_area() + free_area_size - required_size;
+        tag.next_tag_addr = Some(new_tag_addr);
+
         let new_tag = BoundaryTag::from_memory(new_tag_addr, required_size);
-        new_tag.prev_tag_size = tag.free_area_size;
+        new_tag.prev_tag_addr = Some(tag.addr());
 
         (tag, Some(new_tag))
     }
@@ -120,30 +124,25 @@ impl<'a> BoundaryTag {
 
         tag_prev.free_area_size += mem::size_of::<BoundaryTag>() + tag_next.free_area_size;
         tag_prev.is_sentinel = tag_next.is_sentinel;
+        tag_prev.next_tag_addr = tag_next.next_tag_addr;
 
         tag_prev
     }
 
     fn next_tag_of(tag: &'a mut BoundaryTag) -> (&'a mut BoundaryTag, Option<&'a mut BoundaryTag>)
     {
-        if tag.is_sentinel {
-            return (tag, None);
+        match tag.next_tag_addr {
+            Some(addr) => (tag, Some(unsafe { BoundaryTag::cast_addr_tag_mut(addr) })),
+            None       => (tag, None),
         }
-
-        let addr = tag.addr() + tag.free_area_size + mem::size_of::<BoundaryTag>();
-        let next_tag = unsafe { BoundaryTag::cast_addr_tag_mut(addr) };
-        (tag, Some(next_tag))
     }
 
     fn prev_tag_of(tag: &'a mut BoundaryTag) -> (Option<&'a mut BoundaryTag>, &'a mut BoundaryTag)
     {
-        if tag.prev_tag_size == 0 {
-            return (None, tag)
+        match tag.prev_tag_addr {
+            Some(addr) => (Some(unsafe { BoundaryTag::cast_addr_tag_mut(addr) }), tag),
+            None       => (None, tag),
         }
-
-        let addr = tag.addr() - tag.prev_tag_size - mem::size_of::<BoundaryTag>();
-        let prev_tag = unsafe { BoundaryTag::cast_addr_tag_mut(addr) };
-        (Some(prev_tag), tag)
     }
 }
 
