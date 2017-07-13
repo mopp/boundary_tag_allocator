@@ -1,5 +1,12 @@
-#![no_std]
-use core::mem;
+// #![no_std]
+// use core::mem;
+// use core::ptr;
+// #[cfg(test)]
+
+#[macro_use]
+use std::mem;
+use std::ptr;
+
 
 
 trait Allocator {
@@ -27,22 +34,27 @@ impl<'a> MemoryManager<'a> {
 impl<'a> Allocator for MemoryManager<'a> {
     fn malloc<'b, T>(&mut self) -> Option<&'b mut T>
     {
-        let size = mem::size_of::<T>();
-        self
+        let request_size = mem::size_of::<T>();
+        let tag = self
             .tags
             .iter_mut()
-            .find(|t| size < t.free_area_size)
-            .map(|t| {
-                let (_, opt) = BoundaryTag::divide(t, size);
-                if let Some(t) = opt {
-                    t.is_alloc = true;
-                    unsafe {
-                        &mut *(t.addr_free_area() as *mut T)
-                    }
-                } else {
-                    panic!("");
-                }
-            })
+            .find(|t| request_size < t.free_area_size);
+        println!("SIZE = {:?}", request_size);
+
+        let tag =
+            match tag {
+                None => return None,
+                Some(tag) => tag,
+            };
+
+        match BoundaryTag::divide(tag, request_size) {
+            (_, None)           => None,
+            (_, Some(free_tag)) => {
+                println!("free_tag = {:?}", free_tag);
+                free_tag.is_alloc = true;
+                Some(unsafe { &mut *(free_tag.addr_free_area() as *mut T) })
+            },
+        }
     }
 
     fn free<T>(&self, _: &mut T)
@@ -164,9 +176,6 @@ impl<'a> BoundaryTag {
     }
 }
 
-#[cfg(test)]
-#[macro_use]
-extern crate std;
 
 #[cfg(test)]
 mod tests {
@@ -187,223 +196,223 @@ mod tests {
         (addr, SIZE)
     }
 
+    fn write_test(tag: &BoundaryTag)
+    {
+        unsafe {
+            // &mut *(tag.addr_free_area() as *mut _)
+        }
+    }
+
     #[test]
     fn test_all()
     {
         let (addr, size) = allocate_memory();
         let tag1 = BoundaryTag::from_memory(addr, size);
 
-        let (addr, size) = allocate_memory();
-        let tag2 = BoundaryTag::from_memory(addr, size);
-
-        let mut tags = [tag1, tag2];
+        let mut tags = [tag1];
         let mut mman = MemoryManager::new(&mut tags);
 
-        assert_eq!(mem::size_of::<BoundaryTag>(), 48);
+        const SIZE: usize = 512;
+        let slice_opt = mman.malloc::<[u8; SIZE]>();
+        assert_eq!(slice_opt.is_none(), false);
+        let slice = slice_opt.unwrap();
 
-        // let u8_opt = mman.malloc::<u8>();
-        // assert_eq!(u8_opt.is_none(), false);
-        // let a = u8_opt.unwrap();
-        // *a = 0x10;
-
-        // for i in 0..SIZE {
-        // slice[i] = 0xAF;
-        // }
-        // for i in 0..SIZE {
-        // println!("{:?}", i);
-        // assert_eq!(slice[i], 0xAF);
-        // }
+        for i in 0..SIZE {
+            slice[i] = 0xAF;
+            println!("{:03} - {:?}, {:p}", i, slice[i], &slice[i]);
+            assert_eq!(slice[i], 0xAF);
+        }
     }
 
-    #[test]
-    fn test_tag_size()
-    {
-        let (addr, size) = allocate_memory();
-        let tag = BoundaryTag::from_memory(addr, size);
-        assert_eq!(tag.free_area_size, size - mem::size_of::<BoundaryTag>());
+    // #[test]
+    // fn test_tag_size()
+    // {
+    //     let (addr, size) = allocate_memory();
+    //     let tag = BoundaryTag::from_memory(addr, size);
+    //     assert_eq!(tag.free_area_size, size - mem::size_of::<BoundaryTag>());
 
-        let request_size = size / 2;
-        let (tag, new_tag_opt) = BoundaryTag::divide(tag, request_size);
-        let new_tag = new_tag_opt.unwrap();
-        assert_eq!(tag.free_area_size, size - mem::size_of::<BoundaryTag>() * 2 - request_size);
-        assert_eq!(new_tag.free_area_size, request_size);
-        assert_eq!(size, tag.free_area_size + new_tag.free_area_size + mem::size_of::<BoundaryTag>() * 2);
-    }
+    //     let request_size = size / 2;
+    //     let (tag, new_tag_opt) = BoundaryTag::divide(tag, request_size);
+    //     let new_tag = new_tag_opt.unwrap();
+    //     assert_eq!(tag.free_area_size, size - mem::size_of::<BoundaryTag>() * 2 - request_size);
+    //     assert_eq!(new_tag.free_area_size, request_size);
+    //     assert_eq!(size, tag.free_area_size + new_tag.free_area_size + mem::size_of::<BoundaryTag>() * 2);
+    // }
 
-    #[test]
-    #[should_panic]
-    fn test_memory_manager_panic()
-    {
-        let slice: &mut [&mut BoundaryTag] = &mut [];
-        let _ = MemoryManager::new(slice);
-    }
+    // #[test]
+    // #[should_panic]
+    // fn test_memory_manager_panic()
+    // {
+    //     let slice: &mut [&mut BoundaryTag] = &mut [];
+    //     let _ = MemoryManager::new(slice);
+    // }
 
-    #[test]
-    fn test_addr()
-    {
-        let (addr, size) = allocate_memory();
-        let tag = BoundaryTag::from_memory(addr, size);
-        assert_eq!(addr, tag.addr());
-    }
+    // #[test]
+    // fn test_addr()
+    // {
+    //     let (addr, size) = allocate_memory();
+    //     let tag = BoundaryTag::from_memory(addr, size);
+    //     assert_eq!(addr, tag.addr());
+    // }
 
-    #[test]
-    fn test_boundary_tag_from_memory()
-    {
-        let (addr, size) = allocate_memory();
+    // #[test]
+    // fn test_boundary_tag_from_memory()
+    // {
+    //     let (addr, size) = allocate_memory();
 
-        let tag = BoundaryTag::from_memory(addr, size);
-        assert_eq!((tag as *const _) as usize, addr);
-        assert_eq!(tag.free_area_size, size - mem::size_of::<BoundaryTag>());
-        assert_eq!(tag.is_alloc, false);
-        assert_eq!(tag.is_sentinel, true);
-    }
+    //     let tag = BoundaryTag::from_memory(addr, size);
+    //     assert_eq!((tag as *const _) as usize, addr);
+    //     assert_eq!(tag.free_area_size, size - mem::size_of::<BoundaryTag>());
+    //     assert_eq!(tag.is_alloc, false);
+    //     assert_eq!(tag.is_sentinel, true);
+    // }
 
-    #[test]
-    fn test_divide()
-    {
-        let (addr, size) = allocate_memory();
-        let tag = BoundaryTag::from_memory(addr, size);
-        assert_eq!(tag.free_area_size, size - mem::size_of::<BoundaryTag>());
+    // #[test]
+    // fn test_divide()
+    // {
+    //     let (addr, size) = allocate_memory();
+    //     let tag = BoundaryTag::from_memory(addr, size);
+    //     assert_eq!(tag.free_area_size, size - mem::size_of::<BoundaryTag>());
 
-        let request_size = size;
-        let (tag, new_tag_opt) = BoundaryTag::divide(tag, request_size);
-        assert!(new_tag_opt.is_none());
-        assert_eq!(tag.free_area_size, size - mem::size_of::<BoundaryTag>());
+    //     let request_size = size;
+    //     let (tag, new_tag_opt) = BoundaryTag::divide(tag, request_size);
+    //     assert!(new_tag_opt.is_none());
+    //     assert_eq!(tag.free_area_size, size - mem::size_of::<BoundaryTag>());
 
-        let request_size = size / 4;
-        let (tag, new_tag_opt) = BoundaryTag::divide(tag, request_size);
-        let new_tag = new_tag_opt.unwrap();
-        assert_eq!(tag.free_area_size, size - mem::size_of::<BoundaryTag>() - request_size - mem::size_of::<BoundaryTag>());
+    //     let request_size = size / 4;
+    //     let (tag, new_tag_opt) = BoundaryTag::divide(tag, request_size);
+    //     let new_tag = new_tag_opt.unwrap();
+    //     assert_eq!(tag.free_area_size, size - mem::size_of::<BoundaryTag>() - request_size - mem::size_of::<BoundaryTag>());
 
-        assert_eq!(new_tag.addr(), addr + mem::size_of::<BoundaryTag>() + tag.free_area_size);
-        assert_eq!(new_tag.free_area_size, request_size);
-        assert_eq!(new_tag.is_alloc, false);
-        assert_eq!(new_tag.is_sentinel, true);
+    //     assert_eq!(new_tag.addr(), addr + mem::size_of::<BoundaryTag>() + tag.free_area_size);
+    //     assert_eq!(new_tag.free_area_size, request_size);
+    //     assert_eq!(new_tag.is_alloc, false);
+    //     assert_eq!(new_tag.is_sentinel, true);
 
-        assert_eq!(tag.free_area_size, size - (new_tag.free_area_size + mem::size_of::<BoundaryTag>() * 2));
-        assert_eq!(tag.is_alloc, false);
-        assert_eq!(tag.is_sentinel, false);
+    //     assert_eq!(tag.free_area_size, size - (new_tag.free_area_size + mem::size_of::<BoundaryTag>() * 2));
+    //     assert_eq!(tag.is_alloc, false);
+    //     assert_eq!(tag.is_sentinel, false);
 
-        assert_eq!(size, tag.free_area_size + new_tag.free_area_size + mem::size_of::<BoundaryTag>() * 2);
-    }
+    //     assert_eq!(size, tag.free_area_size + new_tag.free_area_size + mem::size_of::<BoundaryTag>() * 2);
+    // }
 
-    #[test]
-    fn test_merge()
-    {
-        let (addr, size) = allocate_memory();
-        let tag = BoundaryTag::from_memory(addr, size);
-        let request_size = size / 4;
-        let (tag, new_tag_opt) = BoundaryTag::divide(tag, request_size);
-        let new_tag = new_tag_opt.unwrap();
+    // #[test]
+    // fn test_merge()
+    // {
+    //     let (addr, size) = allocate_memory();
+    //     let tag = BoundaryTag::from_memory(addr, size);
+    //     let request_size = size / 4;
+    //     let (tag, new_tag_opt) = BoundaryTag::divide(tag, request_size);
+    //     let new_tag = new_tag_opt.unwrap();
 
-        let merged_tag = BoundaryTag::merge(tag, new_tag);
-        assert_eq!(merged_tag.free_area_size, size - mem::size_of::<BoundaryTag>());
-    }
+    //     let merged_tag = BoundaryTag::merge(tag, new_tag);
+    //     assert_eq!(merged_tag.free_area_size, size - mem::size_of::<BoundaryTag>());
+    // }
 
-    #[test]
-    fn test_next_tag_of()
-    {
-        let (addr, size) = allocate_memory();
-        let tag = BoundaryTag::from_memory(addr, size);
-        let (tag, next_tag_opt) = BoundaryTag::next_tag_of(tag);
-        assert_eq!(next_tag_opt.is_none(), true);
+    // #[test]
+    // fn test_next_tag_of()
+    // {
+    //     let (addr, size) = allocate_memory();
+    //     let tag = BoundaryTag::from_memory(addr, size);
+    //     let (tag, next_tag_opt) = BoundaryTag::next_tag_of(tag);
+    //     assert_eq!(next_tag_opt.is_none(), true);
 
-        let request_size = size / 4;
-        let (tag, new_tag_opt) = BoundaryTag::divide(tag, request_size);
-        assert_eq!(new_tag_opt.is_none(), false);
+    //     let request_size = size / 4;
+    //     let (tag, new_tag_opt) = BoundaryTag::divide(tag, request_size);
+    //     assert_eq!(new_tag_opt.is_none(), false);
 
-        let new_tag = new_tag_opt.unwrap();
+    //     let new_tag = new_tag_opt.unwrap();
 
-        let (tag, next_tag_opt) = BoundaryTag::next_tag_of(tag);
-        assert_eq!(next_tag_opt.is_none(), false);
-        let next_tag = next_tag_opt.unwrap();
+    //     let (tag, next_tag_opt) = BoundaryTag::next_tag_of(tag);
+    //     assert_eq!(next_tag_opt.is_none(), false);
+    //     let next_tag = next_tag_opt.unwrap();
 
-        assert_eq!(new_tag.addr(), next_tag.addr());
-        assert_eq!(new_tag.free_area_size, next_tag.free_area_size);
-        assert_eq!(new_tag.is_alloc, next_tag.is_alloc);
-        assert_eq!(new_tag.is_sentinel, next_tag.is_sentinel);
-        assert_eq!(tag.addr(), addr);
+    //     assert_eq!(new_tag.addr(), next_tag.addr());
+    //     assert_eq!(new_tag.free_area_size, next_tag.free_area_size);
+    //     assert_eq!(new_tag.is_alloc, next_tag.is_alloc);
+    //     assert_eq!(new_tag.is_sentinel, next_tag.is_sentinel);
+    //     assert_eq!(tag.addr(), addr);
 
-        let (next_tag, next_next_tag_opt) = BoundaryTag::next_tag_of(next_tag);
-        assert_eq!(next_next_tag_opt.is_none(), true);
+    //     let (next_tag, next_next_tag_opt) = BoundaryTag::next_tag_of(next_tag);
+    //     assert_eq!(next_next_tag_opt.is_none(), true);
 
-        assert_eq!(next_tag.free_area_size, request_size);
-    }
+    //     assert_eq!(next_tag.free_area_size, request_size);
+    // }
 
-    #[test]
-    fn test_prev_tag_of()
-    {
-        let (addr, size) = allocate_memory();
-        let tag = BoundaryTag::from_memory(addr, size);
+    // #[test]
+    // fn test_prev_tag_of()
+    // {
+    //     let (addr, size) = allocate_memory();
+    //     let tag = BoundaryTag::from_memory(addr, size);
 
-        let (none, tag) = BoundaryTag::prev_tag_of(tag);
-        assert_eq!(none.is_none(), true);
+    //     let (none, tag) = BoundaryTag::prev_tag_of(tag);
+    //     assert_eq!(none.is_none(), true);
 
-        let request_size = size / 4;
-        let (tag, new_tag_opt) = BoundaryTag::divide(tag, request_size);
-        assert_eq!(new_tag_opt.is_none(), false);
+    //     let request_size = size / 4;
+    //     let (tag, new_tag_opt) = BoundaryTag::divide(tag, request_size);
+    //     assert_eq!(new_tag_opt.is_none(), false);
 
-        let new_tag = new_tag_opt.unwrap();
-        let (prev_tag_opt, _) = BoundaryTag::prev_tag_of(new_tag);
-        assert_eq!(prev_tag_opt.is_none(), false);
+    //     let new_tag = new_tag_opt.unwrap();
+    //     let (prev_tag_opt, _) = BoundaryTag::prev_tag_of(new_tag);
+    //     assert_eq!(prev_tag_opt.is_none(), false);
 
-        let prev_tag = prev_tag_opt.unwrap();
+    //     let prev_tag = prev_tag_opt.unwrap();
 
-        assert_eq!(prev_tag.addr(), addr);
-        assert_eq!(prev_tag.addr(), tag.addr());
-        assert_eq!(prev_tag.is_alloc, false);
-        assert_eq!(prev_tag.is_sentinel, false);
-        assert_eq!(prev_tag.free_area_size, size - (request_size + 2 * mem::size_of::<BoundaryTag>()));
-    }
+    //     assert_eq!(prev_tag.addr(), addr);
+    //     assert_eq!(prev_tag.addr(), tag.addr());
+    //     assert_eq!(prev_tag.is_alloc, false);
+    //     assert_eq!(prev_tag.is_sentinel, false);
+    //     assert_eq!(prev_tag.free_area_size, size - (request_size + 2 * mem::size_of::<BoundaryTag>()));
+    // }
 
-    #[test]
-    fn test_addr_free_area()
-    {
-        let (addr, size) = allocate_memory();
-        let tag = BoundaryTag::from_memory(addr, size);
-        assert_eq!(tag.addr_free_area(), addr + mem::size_of::<BoundaryTag>());
-        assert_eq!(tag.free_area_size, size - mem::size_of::<BoundaryTag>());
+    // #[test]
+    // fn test_addr_free_area()
+    // {
+    //     let (addr, size) = allocate_memory();
+    //     let tag = BoundaryTag::from_memory(addr, size);
+    //     assert_eq!(tag.addr_free_area(), addr + mem::size_of::<BoundaryTag>());
+    //     assert_eq!(tag.free_area_size, size - mem::size_of::<BoundaryTag>());
 
-        let request_size = size / 4;
-        let (tag, new_tag_opt) = BoundaryTag::divide(tag, request_size);
-        assert_eq!(tag.addr(), addr);
-        assert_eq!(tag.addr_free_area(), addr + mem::size_of::<BoundaryTag>());
-        assert_eq!(tag.free_area_size, size - mem::size_of::<BoundaryTag>() - request_size - mem::size_of::<BoundaryTag>());
+    //     let request_size = size / 4;
+    //     let (tag, new_tag_opt) = BoundaryTag::divide(tag, request_size);
+    //     assert_eq!(tag.addr(), addr);
+    //     assert_eq!(tag.addr_free_area(), addr + mem::size_of::<BoundaryTag>());
+    //     assert_eq!(tag.free_area_size, size - mem::size_of::<BoundaryTag>() - request_size - mem::size_of::<BoundaryTag>());
 
-        let new_tag = new_tag_opt.unwrap();
-        assert_eq!(new_tag.addr_free_area(), new_tag.addr() + mem::size_of::<BoundaryTag>());
-        assert_eq!(new_tag.free_area_size, request_size);
-        assert_eq!(new_tag.addr(), tag.addr() + mem::size_of::<BoundaryTag>() + tag.free_area_size);
-        assert_eq!(new_tag.addr_free_area(), tag.addr_free_area() + tag.free_area_size + mem::size_of::<BoundaryTag>());
+    //     let new_tag = new_tag_opt.unwrap();
+    //     assert_eq!(new_tag.addr_free_area(), new_tag.addr() + mem::size_of::<BoundaryTag>());
+    //     assert_eq!(new_tag.free_area_size, request_size);
+    //     assert_eq!(new_tag.addr(), tag.addr() + mem::size_of::<BoundaryTag>() + tag.free_area_size);
+    //     assert_eq!(new_tag.addr_free_area(), tag.addr_free_area() + tag.free_area_size + mem::size_of::<BoundaryTag>());
 
-        assert_eq!(tag.addr(), new_tag.addr() - tag.free_area_size - mem::size_of::<BoundaryTag>());
-        assert_eq!(tag.addr(), new_tag.addr_free_area() - tag.free_area_size - mem::size_of::<BoundaryTag>() * 2);
-    }
+    //     assert_eq!(tag.addr(), new_tag.addr() - tag.free_area_size - mem::size_of::<BoundaryTag>());
+    //     assert_eq!(tag.addr(), new_tag.addr_free_area() - tag.free_area_size - mem::size_of::<BoundaryTag>() * 2);
+    // }
 
-    #[test]
-    fn test_is_next_of()
-    {
-        let (addr, size) = allocate_memory();
-        let tag = BoundaryTag::from_memory(addr, size);
-        let request_size = size / 4;
-        let (tag, new_tag_opt) = BoundaryTag::divide(tag, request_size);
-        let new_tag = new_tag_opt.unwrap();
+    // #[test]
+    // fn test_is_next_of()
+    // {
+    //     let (addr, size) = allocate_memory();
+    //     let tag = BoundaryTag::from_memory(addr, size);
+    //     let request_size = size / 4;
+    //     let (tag, new_tag_opt) = BoundaryTag::divide(tag, request_size);
+    //     let new_tag = new_tag_opt.unwrap();
 
-        assert_eq!(new_tag.is_next_of(tag), true);
-        assert_eq!(tag.is_next_of(new_tag), false);
-    }
+    //     assert_eq!(new_tag.is_next_of(tag), true);
+    //     assert_eq!(tag.is_next_of(new_tag), false);
+    // }
 
 
-    #[test]
-    fn test_is_prev_of()
-    {
-        let (addr, size) = allocate_memory();
-        let tag = BoundaryTag::from_memory(addr, size);
-        let request_size = size / 4;
-        let (tag, new_tag_opt) = BoundaryTag::divide(tag, request_size);
-        let new_tag = new_tag_opt.unwrap();
+    // #[test]
+    // fn test_is_prev_of()
+    // {
+    //     let (addr, size) = allocate_memory();
+    //     let tag = BoundaryTag::from_memory(addr, size);
+    //     let request_size = size / 4;
+    //     let (tag, new_tag_opt) = BoundaryTag::divide(tag, request_size);
+    //     let new_tag = new_tag_opt.unwrap();
 
-        assert_eq!(new_tag.is_prev_of(tag), false);
-        assert_eq!(tag.is_prev_of(new_tag), true);
-    }
+    //     assert_eq!(new_tag.is_prev_of(tag), false);
+    //     assert_eq!(tag.is_prev_of(new_tag), true);
+    // }
 }
