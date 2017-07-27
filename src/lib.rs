@@ -195,6 +195,7 @@ impl<'a> BoundaryTag {
 #[cfg(test)]
 mod tests {
     use core::mem;
+    use core::ptr::Unique;
 
     use super::MemoryManager;
     use super::BoundaryTag;
@@ -327,35 +328,40 @@ mod tests {
     //     assert_eq!(merged_tag.free_area_size, size - mem::size_of::<BoundaryTag>());
     // }
 
-    // #[test]
-    // fn test_next_tag_of()
-    // {
-    //     let (addr, size) = allocate_memory();
-    //     let tag = BoundaryTag::from_memory(addr, size);
-    //     let (tag, next_tag_opt) = BoundaryTag::next_tag_of(tag);
-    //     assert_eq!(next_tag_opt.is_none(), true);
+    #[test]
+    fn test_next_tag_of()
+    {
+        let (addr, size) = allocate_memory();
+        let tag          = BoundaryTag::from_memory(addr, size);
+        let next_tag_opt = BoundaryTag::next_tag_of(&tag);
+        assert_eq!(next_tag_opt.is_none(), true);
 
-    //     let request_size = size / 4;
-    //     let (tag, new_tag_opt) = BoundaryTag::divide(tag, request_size);
-    //     assert_eq!(new_tag_opt.is_none(), false);
+        let request_size = size / 4;
+        let (tag, new_tag_opt) = BoundaryTag::divide(tag, request_size);
+        assert_eq!(new_tag_opt.is_none(), false);
 
-    //     let new_tag = new_tag_opt.unwrap();
+        let new_tag = new_tag_opt.unwrap();
 
-    //     let (tag, next_tag_opt) = BoundaryTag::next_tag_of(tag);
-    //     assert_eq!(next_tag_opt.is_none(), false);
-    //     let next_tag = next_tag_opt.unwrap();
+        let next_tag_opt = BoundaryTag::next_tag_of(&tag);
+        assert_eq!(next_tag_opt.is_none(), false);
+        let next_tag = next_tag_opt.unwrap();
 
-    //     assert_eq!(new_tag.addr(), next_tag.addr());
-    //     assert_eq!(new_tag.free_area_size, next_tag.free_area_size);
-    //     assert_eq!(new_tag.is_alloc, next_tag.is_alloc);
-    //     assert_eq!(new_tag.is_sentinel, next_tag.is_sentinel);
-    //     assert_eq!(tag.addr(), addr);
+        {
+            let tag = unsafe { tag.as_ref() };
+            let new_tag = unsafe { new_tag.as_ref() };
+            assert_eq!(new_tag.addr(), next_tag.addr());
+            assert_eq!(new_tag.free_area_size, next_tag.free_area_size);
+            assert_eq!(new_tag.is_alloc, next_tag.is_alloc);
+            assert_eq!(new_tag.is_sentinel, next_tag.is_sentinel);
+            assert_eq!(tag.addr(), addr);
+        }
 
-    //     let (next_tag, next_next_tag_opt) = BoundaryTag::next_tag_of(next_tag);
-    //     assert_eq!(next_next_tag_opt.is_none(), true);
+        let tmp = unsafe{Unique::new(next_tag)};
+        let next_next_tag_opt = BoundaryTag::next_tag_of(&tmp);
+        assert_eq!(next_next_tag_opt.is_none(), true);
 
-    //     assert_eq!(next_tag.free_area_size, request_size);
-    // }
+        assert_eq!(next_tag.free_area_size, request_size);
+    }
 
     #[test]
     fn test_prev_tag_of()
